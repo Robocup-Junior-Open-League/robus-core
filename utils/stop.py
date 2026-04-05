@@ -1,54 +1,46 @@
-# TelemetryBroker Node Killer (GROUP VERSION)
+# TelemetryBroker for Inter Process Communication for Robtics
+# KILL all running Nodes
+# Developed by Martin Novak at 2025/26
+# pip install psutil
 
 import psutil
 import os
-import signal
+
 
 def auto_kill_node_scripts():
+    # Get own PID so the script does not terminate itself
     own_pid = os.getpid()
-    killed_groups = set()
-    found = 0
+    found_processes = 0
 
-    print("Searching for running node scripts (group mode)...")
+    print("Searching for running Python scripts starting with 'node'...")
 
     for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
         try:
             cmdline = proc.info.get('cmdline')
 
+            # Skip processes without a command line (e.g. system kernel)
             if not cmdline or len(cmdline) < 2:
                 continue
 
+            # Check:
+            # 1. Is it a Python process?
+            # 2. Does the first argument (the script) start with 'node'?
             script_path = cmdline[1]
             script_name = os.path.basename(script_path)
 
             if "python" in proc.info['name'].lower() and script_name.startswith("node"):
-                if proc.pid == own_pid:
-                    continue
-
-                try:
-                    if os.name == 'posix':
-                        pgid = os.getpgid(proc.pid)
-
-                        if pgid not in killed_groups:
-                            print(f"[*] Killing group {pgid} (node: {script_name})")
-                            os.killpg(pgid, signal.SIGINT)
-                            killed_groups.add(pgid)
-                            found += 1
-                    else:
-                        print(f"[*] Terminating (Windows): {script_name} PID {proc.pid}")
-                        proc.terminate()
-                        found += 1
-
-                except Exception as e:
-                    print(f"[!] Error killing {script_name}: {e}")
+                if proc.info['pid'] != own_pid:
+                    print(f"[*] Terminating: {script_name} (PID: {proc.info['pid']})")
+                    proc.terminate()
+                    found_processes += 1
 
         except (psutil.NoSuchProcess, psutil.AccessDenied):
             continue
 
-    if found == 0:
-        print("[i] No matching node scripts found.")
+    if found_processes == 0:
+        print("[i] No matching scripts found.")
     else:
-        print(f"[!] Stopped {found} node group(s).")
+        print(f"[!] Stopped {found_processes} script(s) in total.")
 
 if __name__ == "__main__":
     auto_kill_node_scripts()
